@@ -3,7 +3,9 @@ package bgu.spl.net.impl.tftp;
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
 
-import java.io.IOException;
+import java.io.*;
+import java.net.DatagramPacket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,6 +24,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private int connectionId;
     private Connections<byte[]> connections;
     private boolean shouldTerminate = false;
+
     Path filesFolder;
 
     @Override
@@ -67,7 +70,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void broadcastFileAddedDeleted(byte[] message) {
         for(Integer id : holder.ids_login.keySet()){
-            if(holder.ids_login.get(id) == true) {
+            if(holder.ids_login.get(id)) {
                 connections.send(id,message);
             }
         }
@@ -93,11 +96,10 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         }
 
 
-
     }
 
     private void loginRequest(byte[] message) {
-        if(holder.ids_login.get(connectionId) == true){
+        if(holder.ids_login.get(connectionId)){
             byte[] ERROR = {0,5,0,7};
             error(ERROR);
         }
@@ -171,16 +173,95 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         connections.send(connectionId,message);
     }
 
-    private void dataPacket(byte[] message) {
+    private byte[] dataPacket(byte[] message) {
+        byte[] Data = {0,3};
 
-
+        return Data;
     }
 
     private void writeRequest(byte[] message) {
 
+
     }
 
     private void readRequest(byte[] message) {
+        String fileName = new String(message, StandardCharsets.UTF_8);
+        // Check if file exists
+        File file = new File("Files/" + fileName);
+        if (!file.exists()) {
+            // Send error packet if file not found
+            byte[] ERROR = {0,5,0,1};
+            error(ERROR);
+            return;
+        }
+        // If file exists, send file data to client
+        try {
+            sendFile(file);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    private void sendFile(File file) throws IOException {
+        FileInputStream fileInputStream = new FileInputStream(file);
+        int blockNumber = 1;
+        int bytesRead;
+        byte[] dataBuffer = new byte[512]; // Data payload size in TFTP packet
+        // Send file data in blocks
+        while ((bytesRead = fileInputStream.read(dataBuffer)) != -1) {
+            // Calculate packet size
+            int packetSize = Math.min(bytesRead, 512);
+
+            // Construct DATA packet
+            ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+            DataOutputStream outputStream = new DataOutputStream(byteStream);
+            outputStream.writeShort(3); // Opcode for DATA
+            outputStream.writeShort(packetSize); // Packet size
+            outputStream.writeShort(blockNumber); // Block number
+            outputStream.write(dataBuffer, 0, packetSize); // Data
+            byte[] DATA = byteStream.toByteArray();
+            connections.send(connectionId,DATA);
+            boolean ackReceived = waitForAck(blockNumber);
+            if (!ackReceived) {
+                // Timeout waiting for ACK, resend data packet
+                connections.send(connectionId, DATA);
+            }
+            blockNumber++;
+            // If packet size is less than 512, it's the last packet
+            if (packetSize < 512) {
+                break;
+            }
+
+        }
+    }
+
+    private boolean waitForAck(int expectedBlockNumber) throws IOException {
+        byte[] ackBuffer = new byte[4]; // Buffer for ACK packet
+        // Set a timeout for receiving ACK
+        connections.setSoTimeout(connectionId, 5000); //added method in connections
+        boolean ackReceived = false;
+        while (!ackReceived){
+            try {
+                connections.receive(connectionId, new DatagramPacket(ackBuffer, ackBuffer.length));
+                // Process received ACK packet
+                ByteArrayInputStream byteStream = new ByteArrayInputStream(ackBuffer);
+                DataInputStream inputStream = new DataInputStream(byteStream);
+                int opcode = inputStream.readShort();
+
+                if (opcode == 4) { // ACK
+                    int receivedBlockNumber = inputStream.readShort();
+                    if (receivedBlockNumber == expectedBlockNumber) {
+                        // ACK received for expected block number
+                        ackReceived = true;
+                    }
+                }
+            }catch (SocketTimeoutException e) {
+                // Timeout waiting for ACK
+                return false;
+            }
+        }
+        return true; // ACK received within timeout
     }
 
     @Override
@@ -188,6 +269,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         // TODO implement this
         throw new UnsupportedOperationException("Unimplemented method 'shouldTerminate'");
     }
+
     public static byte[] concatenateByteArrays(byte[] array1, byte[] array2) {
         int length1 = array1.length;
         int length2 = array2.length;
