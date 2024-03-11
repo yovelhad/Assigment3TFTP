@@ -52,7 +52,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 writeRequest(meatOfMessage);
                 break;
             case 6:
-                directoryListingRequest(meatOfMessage);
+                directoryListingRequest();
                 break;
             case 7:
                 loginRequest(meatOfMessage);
@@ -113,9 +113,44 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     }
 
-    private void directoryListingRequest(byte[] message) {
-
+    private void directoryListingRequest() {
+        // Get list of filenames in the directory
+        File directory = new File("Files");
+        String[] filenames = directory.list();
+        StringBuilder directoryListing = new StringBuilder();
+        if (filenames != null) {
+            for (String filename : filenames) {
+                directoryListing.append(filename).append((char) 0);
+            }
+        }
+        // Send directory listing as DATA packets
+        sendDataPacket(connectionId, directoryListing.toString().getBytes());
     }
+
+    private void sendDataPacket(int connectionId, byte[] data) {
+        int blockSize = 512; // Max size for TFTP DATA packet
+        int blockNumber = 1;
+        int offset = 0;
+        // Send data in blocks
+        while (offset < data.length) {
+            int packetSize = Math.min(data.length - offset, blockSize);
+            // Construct DATA packet
+            byte[] packetData = new byte[4 + packetSize]; // opcode + block number + data
+            packetData[0] = 0; // Opcode for DATA
+            packetData[1] = 3;
+            packetData[2] = (byte) ((blockNumber >> 8) & 0xFF); // Block number (high byte)
+            packetData[3] = (byte) (blockNumber & 0xFF); // Block number (low byte)
+            System.arraycopy(data, offset, packetData, 4, packetSize); // Copy data into packet
+            // Send DatagramPacket
+            connections.send(connectionId, packetData);
+            // Increment block number
+            blockNumber++;
+            // Move to next block of data
+            offset += packetSize;
+        }
+    }
+
+}
 
     private void error(byte[] message) {
         short errorCode = (short) (((short) message[2]) << 8 | (short) (message[3]));
@@ -180,8 +215,61 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private void writeRequest(byte[] message) {
+        String fileName = new String(message, StandardCharsets.UTF_8);
+        File file = new File("Files/" + fileName);
+        if (file.exists()) {
+            // File already exists, send error packet
+            byte[] ERROR = {0,5,0,5};
+            error(ERROR);
+            return;
+        }
+        // Acknowledge WRQ with block number 0
+        byte[] ACK = {0,4,0,0};
+        acknowledgment(ACK);
+        // Receive file from client and save it
+        try {
+            receiveFile(connectionId, file);
+        } catch (IOException e) {
+            // Handle IOException
+            e.printStackTrace();
+        }
 
+    }
 
+    private void receiveFile(int connectionId, File file) throws IOException {
+        // Open file for writing
+        FileOutputStream fileOutputStream = new FileOutputStream(file);
+        int blockNumber = 1;
+        byte[] ACK1 = {0,4,0, (byte) blockNumber};
+        acknowledgment(ACK1);
+        while(true){
+            // Receive DATA packet from client
+            DatagramPacket dataPacket = receiveDataPacket(connectionId);
+            // Check if it's the last data packet
+            int packetSize = dataPacket.getLength() - 4; // Subtracting opcode and block number
+            if (packetSize < 512) {
+                // Last packet received, exit loop
+                break;
+            }
+            // Write data to file
+            fileOutputStream.write(dataPacket.getData(), 4, packetSize);
+
+            // Send ACK for received block number
+            byte[] ACK2 = {0,4,0, (byte) blockNumber};
+            acknowledgment(ACK2);
+
+            // Increment block number
+            blockNumber++;
+        }
+        // Close file output stream
+        fileOutputStream.close();
+    }
+
+    private DatagramPacket receiveDataPacket(int connectionId) {
+        byte[] dataBuffer = new byte[516]; // Max size for TFTP DATA packet
+        // Receive DATA packet directly into dataBuffer
+        connections.receive(connectionId, new DatagramPacket(dataBuffer, dataBuffer.length));
+        return new DatagramPacket(dataBuffer, dataBuffer.length);
     }
 
     private void readRequest(byte[] message) {
