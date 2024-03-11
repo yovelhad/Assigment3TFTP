@@ -150,8 +150,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         }
     }
 
-}
-
     private void error(byte[] message) {
         short errorCode = (short) (((short) message[2]) << 8 | (short) (message[3]));
         String errorMessage ="";
