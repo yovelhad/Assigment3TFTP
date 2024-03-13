@@ -50,7 +50,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         short opcode = (short) (((short) message[0]) << 8 | (short) (message[1]));
         byte[] meatOfMessage = Arrays.copyOfRange(message, 2, message.length);
 
-        shouldTerminate = opcode==10;
+
         switch (opcode){
             case 1:
                 readRequest(meatOfMessage);
@@ -73,8 +73,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 deleteFileRequest(meatOfMessage);
                 break;
             case 10:
-                shouldTerminate();
-
+                shouldTerminate = true;
         }
     }
 
@@ -138,33 +137,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         connections.send(connectionId,directoryListingInBytes);
     }
 
-    // private void sendDataPacket(int connectionId, byte[] data) {
-    //     int blockSize = 512; // Max size for TFTP DATA packet
-    //     int blockNumber = 1;
-    //     int offset = 0;
-    //     // Send data in blocks
-    //     while (offset < data.length) {
-    //         Integer packetSize = Math.min(data.length - offset, blockSize);
-    //         // Construct DATA packet
-    //         byte[] packetData = new byte[4 + packetSize]; // opcode + block number + data
-    //         packetData[0] = 0; // Opcode for DATA
-    //         packetData[1] = 3;
-    //         // Scaling the integer to fit within the range of a byte
-    //         int scaledValue = (int) ((double) packetSize * 255 / 512);
-    //         // Convert the scaled value to two bytes
-    //         byte byte1 = (byte) (scaledValue / 256);  // Most significant byte
-    //         byte byte2 = (byte) (scaledValue % 256);  // Least significant byte
-    //         packetData[2] = byte1;
-    //         packetData[3] = byte2;
-    //         System.arraycopy(data, offset, packetData, 4, packetSize); // Copy data into packet
-    //         // Send DatagramPacket
-    //         connections.send(connectionId, packetData);
-    //         // Increment block number
-    //         blockNumber++;
-    //         // Move to next block of data
-    //         offset += packetSize;
-    //     }
-    // }
 
     private void error(byte[] message) {
         short errorCode = (short) (((short) message[2]) << 8 | (short) (message[3]));
@@ -276,39 +248,10 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         connections.send(connectionId, dataPacket);
     }
 
-//
-//    private boolean waitForAck(int expectedBlockNumber) throws IOException {
-//        byte[] ackBuffer = new byte[4]; // Buffer for ACK packet
-//        // Set a timeout for receiving ACK
-////        connections.setSoTimeout(connectionId, 5000); //added method in connections
-//        boolean ackReceived = false;
-//        while (!ackReceived){
-//            try {
-//                connections.receive(connectionId, new DatagramPacket(ackBuffer, ackBuffer.length));
-//                // Process received ACK packet
-//                ByteArrayInputStream byteStream = new ByteArrayInputStream(ackBuffer);
-//                DataInputStream inputStream = new DataInputStream(byteStream);
-//                int opcode = inputStream.readShort();
-//                if (opcode == 4) { // ACK
-//                    int receivedBlockNumber = inputStream.readShort();
-//                    if (receivedBlockNumber == expectedBlockNumber) {
-//                        // ACK received for expected block number
-//                        ackReceived = true;
-//                    }
-//                }
-//            }catch (SocketTimeoutException e) {
-//                // Timeout waiting for ACK
-//                return false;
-//            }
-//        }
-//        return true; // ACK received within timeout
-//    }
 
     @Override
     public boolean shouldTerminate() {
-        // TODO implement this
-        System.out.println("nmamamaa");
-        return false;
+        return shouldTerminate;
     }
 
     public static byte[] concatenateByteArrays(byte[] array1, byte[] array2) {

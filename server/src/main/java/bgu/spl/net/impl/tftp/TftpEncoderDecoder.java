@@ -65,7 +65,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
     @Override
     public byte[] encode(byte[] message) {
         byte[] ret = new byte[message.length+1];
-        for(int i = 0; i<ret.length; i++){
+        for(int i = 0; i<message.length; i++){
             ret[i]=message[i];
         }
         ret[ret.length-1] = 0;
