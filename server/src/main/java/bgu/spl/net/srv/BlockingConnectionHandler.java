@@ -5,6 +5,7 @@ import bgu.spl.net.api.MessagingProtocol;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.Socket;
 
 public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler<T> {
@@ -55,6 +56,16 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 
     @Override
     public void send(T msg) {
-        //IMPLEMENT IF NEEDED
+        try{
+            OutputStream outputStream = sock.getOutputStream();
+            outputStream.write(encdec.encode(msg));
+
+        }catch(IOException e){
+            e.printStackTrace();
+        }
+        //implemented because obviously needed.
+    }
+    public Socket getSock(){
+        return sock;
     }
 }
