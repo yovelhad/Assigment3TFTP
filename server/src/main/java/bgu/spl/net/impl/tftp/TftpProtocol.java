@@ -2,8 +2,10 @@ package bgu.spl.net.impl.tftp;
 
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
+import javafx.scene.input.ClipboardContent;
 
 import java.io.*;
+import java.lang.reflect.Array;
 import java.net.DatagramPacket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
@@ -13,17 +15,19 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import javax.crypto.IllegalBlockSizeException;
+
 class holder{
     static ConcurrentHashMap<Integer, Boolean> ids_login = new ConcurrentHashMap<>();
     static List<String> activeUsers = new ArrayList<>();
 
 }
 public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
+
     private int connectionId;
     private Connections<byte[]> connections;
     private boolean shouldTerminate = false;
-    ConcurrentHashMap<Integer, clientFileMonitor> clientMonitor;
-
+    ClientFileMonitor clientMonitor;
     Path filesFolder;
 
     @Override
@@ -34,9 +38,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         holder.ids_login.put(connectionId, false);
         Path filesFolder = Paths.get("Files");
         Set<Integer> ids_loginKeySets =  holder.ids_login.keySet();
-        for(Integer id: ids_loginKeySets){
-            clientMonitor.put(id,new clientFileMonitor(id));
-        }
+        clientMonitor = new ClientFileMonitor();
         // TODO implement this
     }
 
@@ -54,6 +56,10 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             case 2:
                 writeRequest(meatOfMessage);
                 break;
+            case 3:
+                receiveDataPacket(meatOfMessage);
+            case 4:
+                receiveACK(meatOfMessage);
             case 6:
                 directoryListingRequest();
                 break;
@@ -70,6 +76,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         // TODO implement this
         throw new UnsupportedOperationException("Unimplemented method 'process'");
     }
+
 
     private void broadcastFileAddedDeleted(byte[] message) {
         for(Integer id : holder.ids_login.keySet()){
@@ -130,33 +137,33 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         connections.send(connectionId,directoryListingInBytes);
     }
 
-    private void sendDataPacket(int connectionId, byte[] data) {
-        int blockSize = 512; // Max size for TFTP DATA packet
-        int blockNumber = 1;
-        int offset = 0;
-        // Send data in blocks
-        while (offset < data.length) {
-            Integer packetSize = Math.min(data.length - offset, blockSize);
-            // Construct DATA packet
-            byte[] packetData = new byte[4 + packetSize]; // opcode + block number + data
-            packetData[0] = 0; // Opcode for DATA
-            packetData[1] = 3;
-            // Scaling the integer to fit within the range of a byte
-            int scaledValue = (int) ((double) packetSize * 255 / 512);
-            // Convert the scaled value to two bytes
-            byte byte1 = (byte) (scaledValue / 256);  // Most significant byte
-            byte byte2 = (byte) (scaledValue % 256);  // Least significant byte
-            packetData[2] = byte1;
-            packetData[3] = byte2;
-            System.arraycopy(data, offset, packetData, 4, packetSize); // Copy data into packet
-            // Send DatagramPacket
-            connections.send(connectionId, packetData);
-            // Increment block number
-            blockNumber++;
-            // Move to next block of data
-            offset += packetSize;
-        }
-    }
+    // private void sendDataPacket(int connectionId, byte[] data) {
+    //     int blockSize = 512; // Max size for TFTP DATA packet
+    //     int blockNumber = 1;
+    //     int offset = 0;
+    //     // Send data in blocks
+    //     while (offset < data.length) {
+    //         Integer packetSize = Math.min(data.length - offset, blockSize);
+    //         // Construct DATA packet
+    //         byte[] packetData = new byte[4 + packetSize]; // opcode + block number + data
+    //         packetData[0] = 0; // Opcode for DATA
+    //         packetData[1] = 3;
+    //         // Scaling the integer to fit within the range of a byte
+    //         int scaledValue = (int) ((double) packetSize * 255 / 512);
+    //         // Convert the scaled value to two bytes
+    //         byte byte1 = (byte) (scaledValue / 256);  // Most significant byte
+    //         byte byte2 = (byte) (scaledValue % 256);  // Least significant byte
+    //         packetData[2] = byte1;
+    //         packetData[3] = byte2;
+    //         System.arraycopy(data, offset, packetData, 4, packetSize); // Copy data into packet
+    //         // Send DatagramPacket
+    //         connections.send(connectionId, packetData);
+    //         // Increment block number
+    //         blockNumber++;
+    //         // Move to next block of data
+    //         offset += packetSize;
+    //     }
+    // }
 
     private void error(byte[] message) {
         short errorCode = (short) (((short) message[2]) << 8 | (short) (message[3]));
@@ -214,13 +221,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         connections.send(connectionId,message);
     }
 
-    private byte[] dataPacket(byte[] message) {
-        byte[] Data = {0,3};
 
-        return Data;
-    }
-
-    private void writeRequest(byte[] message) {
+    private void writeRequest(byte[] message) { //checking if the file the client wishes to upload already exists
         String fileName = new String(message, StandardCharsets.UTF_8);
         File file = new File("Flies/" + fileName);
         if (file.exists()) {
@@ -229,54 +231,13 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             error(ERROR);
             return;
         }
+        clientMonitor.setNewUploadFile("Flies/" + fileName);
+
         // Acknowledge WRQ with block number 0
         byte[] ACK = {0,4,0,0};
         acknowledgment(ACK);
-//        // Receive file from client and save it
-//        try {
-//            receiveFile(connectionId, file);
-//        } catch (IOException e) {
-//            // Handle IOException
-//            e.printStackTrace();
-//        }
-
     }
 
-//    private void receiveFile(int connectionId, File file) throws IOException {
-//        // Open file for writing
-//        FileOutputStream fileOutputStream = new FileOutputStream(file);
-//        int blockNumber = 1;
-//        byte[] ACK1 = {0,4,0, (byte) blockNumber};
-//        acknowledgment(ACK1);
-//        while(true){
-//            // Receive DATA packet from client
-//            DatagramPacket dataPacket = receiveDataPacket(connectionId);
-//            // Check if it's the last data packet
-//            int packetSize = dataPacket.getLength() - 4; // Subtracting opcode and block number
-//            if (packetSize < 512) {
-//                // Last packet received, exit loop
-//                break;
-//            }
-//            // Write data to file
-//            fileOutputStream.write(dataPacket.getData(), 4, packetSize);
-//
-//            // Send ACK for received block number
-//            byte[] ACK2 = {0,4,0, (byte) blockNumber};
-//            acknowledgment(ACK2);
-//
-//            // Increment block number
-//            blockNumber++;
-//        }
-//        // Close file output stream
-//        fileOutputStream.close();
-//    }
-//
-//    private DatagramPacket receiveDataPacket(int connectionId) {
-//        byte[] dataBuffer = new byte[516]; // Max size for TFTP DATA packet
-//        // Receive DATA packet directly into dataBuffer
-//        connections.receive(connectionId);
-//        return new DatagramPacket(dataBuffer, dataBuffer.length);
-//    }
 
     private void readRequest(byte[] message) {
         String fileName = new String(message, StandardCharsets.UTF_8);
@@ -290,32 +251,30 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         }
         // If file exists, send file data to client
         try {
-            sendFile(file);
+            setAndSendFile(file);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
     }
 
-    private void sendFile(File file) throws IOException {
-        FileInputStream fileInputStream = new FileInputStream(file);
-        int blockNumber = 1;
-        int bytesRead;
-        byte[] dataBuffer = new byte[512]; // Data payload size in TFTP packet
-        bytesRead = fileInputStream.read(dataBuffer);
-        // Send file data in blocks
-        // Calculate packet size
-        int packetSize = Math.min(bytesRead, 512);
-        // Construct DATA packet
-        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-        DataOutputStream outputStream = new DataOutputStream(byteStream);
-        outputStream.writeShort(3); // Opcode for DATA
-        outputStream.writeShort(packetSize); // Packet size
-        outputStream.writeShort(blockNumber); // Block number
-        outputStream.write(dataBuffer, 0, packetSize); // Data
-        byte[] DATA = byteStream.toByteArray();
-        connections.send(connectionId, DATA);
+    public void receiveACK(byte[] message) {
+        short blockNumber = (short) (((short) message[0]) << 8 | (short) (message[1]));
+        int currentBlockNumber = clientMonitor.getDownloadMonitor()-1;
+        sendFile();
     }
+
+    private void setAndSendFile(File file) throws IOException {
+        FileInputStream fileToInputStream = new FileInputStream(file);
+        clientMonitor.setDownloadFile(fileToInputStream);
+        sendFile();
+
+    }
+    private void sendFile(){
+        byte[] dataPacket = clientMonitor.getNextPacket();
+        connections.send(connectionId, dataPacket);
+    }
+
 //
 //    private boolean waitForAck(int expectedBlockNumber) throws IOException {
 //        byte[] ackBuffer = new byte[4]; // Buffer for ACK packet
@@ -364,6 +323,16 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         System.arraycopy(array2, 0, result, length1, length2);
 
         return result;
+    }
+
+    private void receiveDataPacket(byte[] message) {
+        short sizeOfPacket = (short) (((short) message[0]) << 8 | (short) (message[1]));    
+        byte[] onlyData = Arrays.copyOfRange(message, 4, message.length);
+        clientMonitor.setUploadFile(onlyData, sizeOfPacket);
+        short blockNumber = clientMonitor.getBlockNumber();
+        byte[] blockNumberBytes = new byte[]{(byte) (blockNumber>>8),(byte)(blockNumber&0xff)};
+        byte[] ACK = new byte[]{0,4,blockNumberBytes[0],blockNumberBytes[1]};
+        acknowledgment(ACK);
     }
 
 
