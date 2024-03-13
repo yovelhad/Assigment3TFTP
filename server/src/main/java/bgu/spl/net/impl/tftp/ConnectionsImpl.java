@@ -16,8 +16,8 @@ public class ConnectionsImpl<T> implements Connections<T> {
     }
 
     @Override
-    public void connect(int connectionId, ConnectionHandler<T> handler) {
-        clientsMap.put(connectionId, (BlockingConnectionHandler<T>) handler);
+    public void connect(int connectionId, BlockingConnectionHandler<T> handler) {
+        clientsMap.put(connectionId, handler);
     }
 
     @Override

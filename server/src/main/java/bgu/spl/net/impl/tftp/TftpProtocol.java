@@ -2,7 +2,6 @@ package bgu.spl.net.impl.tftp;
 
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
-import javafx.scene.input.ClipboardContent;
 
 import java.io.*;
 import java.lang.reflect.Array;
@@ -44,9 +43,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     @Override
     public void process(byte[] message) {
-
+        System.out.println("alksmdaskdlamsd");
+        if(message.length<2){
+            return;
+        }
         short opcode = (short) (((short) message[0]) << 8 | (short) (message[1]));
-        byte[] meatOfMessage = Arrays.copyOfRange(message, 2, message.length-1);
+        byte[] meatOfMessage = Arrays.copyOfRange(message, 2, message.length);
 
         shouldTerminate = opcode==10;
         switch (opcode){
@@ -60,6 +62,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 receiveDataPacket(meatOfMessage);
             case 4:
                 receiveACK(meatOfMessage);
+                break;
             case 6:
                 directoryListingRequest();
                 break;
@@ -73,8 +76,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 shouldTerminate();
 
         }
-        // TODO implement this
-        throw new UnsupportedOperationException("Unimplemented method 'process'");
     }
 
 
@@ -306,7 +307,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     @Override
     public boolean shouldTerminate() {
         // TODO implement this
-        throw new UnsupportedOperationException("Unimplemented method 'shouldTerminate'");
+        System.out.println("nmamamaa");
+        return false;
     }
 
     public static byte[] concatenateByteArrays(byte[] array1, byte[] array2) {
