@@ -8,11 +8,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ConnectionsImpl<T> implements Connections<T> {
-    HashMap<Integer, BlockingConnectionHandler<T>> clientsMap; //holds each connected client
+    private ConcurrentHashMap<Integer, BlockingConnectionHandler<T>> clientsMap; //holds each connected client
     public ConnectionsImpl(){
-        clientsMap = new HashMap<Integer, BlockingConnectionHandler<T>>();
+        clientsMap = new ConcurrentHashMap<Integer, BlockingConnectionHandler<T>>();
     }
 
     @Override
@@ -36,29 +37,4 @@ public class ConnectionsImpl<T> implements Connections<T> {
 
     }
 
-
-    public void setSoTimeout(int connectionId, int timeOut) {
-
-    }
-
-
-//    public byte[] receive(int connectionId) {
-//        BlockingConnectionHandler<T> currentClient = clientsMap.get(connectionId);
-//        if(currentClient!=null){
-//            try {
-//                InputStream inputStream = currentClient.getSock().getInputStream();
-//                byte[] buffer = new byte[512];
-//                int byteRead = inputStream.read(buffer);
-//                if(byteRead==0 || byteRead==-1){
-//                    return null;
-//                }
-//                else{
-//                    return buffer;
-//                }
-//            }catch(IOException e){
-//                e.printStackTrace();
-//            }
-//        }
-//
-//    }
 }

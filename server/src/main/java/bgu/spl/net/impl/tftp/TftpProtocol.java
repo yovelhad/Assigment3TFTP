@@ -38,15 +38,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         this.connections = connections;
         this.shouldTerminate=false;
         holder.ids_login.put(connectionId, false);
-        Path filesFolder = Paths.get("Files");
-        Set<Integer> ids_loginKeySets =  holder.ids_login.keySet();
         clientMonitor = new ClientFileMonitor();
-        // TODO implement this
     }
 
     @Override
     public void process(byte[] message) {
-        System.out.println("alksmdaskdlamsd");
+        System.out.println(message);
         if(message.length<2){
             return;
         }
@@ -225,6 +222,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         File file = new File(filePath + fileName);
         if (!file.exists()) {
             // Send error packet if file not found
+            byte[] ACK = {0,4,0,1};
+            acknowledgment(ACK);
             byte[] ERROR = {0,5,0,1};
             error(ERROR);
             return;
@@ -247,6 +246,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private void setAndSendFile(File file) throws IOException {
         FileInputStream fileToInputStream = new FileInputStream(file);
         clientMonitor.setDownloadFile(fileToInputStream);
+
         sendFile();
 
     }
