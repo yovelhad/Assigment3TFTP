@@ -14,6 +14,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
     //messages are just filenames in UTF8
     public byte[] decodeNextByte(byte nextByte) {
         // TODO: implement this
+        bytes.add(nextByte);
         if(bytes.size()>=2) {
             short opcode = (short) ((short) bytes.get(0) & 0xFF << 8 | (short) bytes.get(1) & 0xFF);
             switch (opcode) {
@@ -50,7 +51,6 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 
             }
         }
-        bytes.add(nextByte);
         return null;
     }
     public byte[] listToArray(){

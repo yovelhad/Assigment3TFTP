@@ -84,6 +84,14 @@ public class ClientFileMonitor {
             if(size ==-1){
                 finishedDownloading=true;
             }
+            byte[] sizeBytes = new byte[] {(byte) (size>>8),(byte)(size&0xff)};
+            byte[] blockNumberBytes = new byte[] {(byte) (downloadMonitor>>8),(byte)(downloadMonitor&0xff)};
+            dataOpCode[0] = 0;
+            dataOpCode[1] = 3;
+            dataOpCode[2] = sizeBytes[0];
+            dataOpCode[3] = sizeBytes[1];
+            dataOpCode[4] = blockNumberBytes[0];
+            dataOpCode[5] = blockNumberBytes[1];
             return TftpProtocol.concatenateByteArrays(dataOpCode, nextPacket);
         } catch (IOException e) {
             e.printStackTrace();

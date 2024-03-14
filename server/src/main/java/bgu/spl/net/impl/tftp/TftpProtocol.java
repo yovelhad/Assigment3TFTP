@@ -49,8 +49,11 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         }
         short opcode = (short) (((short) message[0]) << 8 | (short) (message[1]));
         byte[] meatOfMessage = Arrays.copyOfRange(message, 2, message.length);
-
-
+        if(opcode!=7  && !holder.ids_login.get(connectionId)){
+            byte[] ERROR = {0,5,0,6};
+            error(ERROR);
+            return;
+        }
         switch (opcode){
             case 1:
                 readRequest(meatOfMessage);
@@ -214,8 +217,9 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void readRequest(byte[] message) {
         String fileName = new String(message, StandardCharsets.UTF_8);
+        String filePath = System.getProperty("user.dir") + "/server/Flies/";
         // Check if file exists
-        File file = new File("Files/" + fileName);
+        File file = new File(filePath + fileName);
         if (!file.exists()) {
             // Send error packet if file not found
             byte[] ERROR = {0,5,0,1};
