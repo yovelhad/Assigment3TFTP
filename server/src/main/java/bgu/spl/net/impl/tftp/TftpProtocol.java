@@ -20,6 +20,8 @@ class holder{
     static ConcurrentHashMap<Integer, Boolean> ids_login = new ConcurrentHashMap<>();
     static List<String> activeUsers = new ArrayList<>();
 
+    static Integer clientCounter = 0 ;
+
 }
 public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
@@ -31,7 +33,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     @Override
     public void start(int connectionId, Connections<byte[]> connections) {
-        this.connectionId = connectionId;
+        this.connectionId = connectionId + holder.clientCounter;
+        holder.clientCounter++;
         this.connections = connections;
         this.shouldTerminate=false;
         holder.ids_login.put(connectionId, false);
