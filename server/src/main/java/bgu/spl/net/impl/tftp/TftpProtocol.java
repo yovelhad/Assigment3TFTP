@@ -4,17 +4,12 @@ import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
 
 import java.io.*;
-import java.lang.reflect.Array;
-import java.net.DatagramPacket;
-import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-
-import javax.crypto.IllegalBlockSizeException;
 
 class holder{
     static ConcurrentHashMap<Integer, Boolean> ids_login = new ConcurrentHashMap<>();
@@ -29,7 +24,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private Connections<byte[]> connections;
     private boolean shouldTerminate = false;
     ClientFileMonitor clientMonitor;
-    Path filesFolder;
+    String filesFolderPath;
 
     @Override
     public void start(int connectionId, Connections<byte[]> connections) {
@@ -39,6 +34,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         this.shouldTerminate=false;
         holder.ids_login.put(connectionId, false);
         clientMonitor = new ClientFileMonitor();
+        filesFolderPath = System.getProperty("user.dir") + "/server/Flies/";
     }
 
     @Override
@@ -76,8 +72,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 deleteFileRequest(meatOfMessage);
                 break;
             case 10:
-                shouldTerminate = true;
+                handleDisc();
         }
+    }
+
+    private void handleDisc() {
+        connections.disconnect(connectionId);
     }
 
 
@@ -91,7 +91,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void deleteFileRequest(byte[] message) {
         String fileName = new String(message, StandardCharsets.UTF_8);
-        Path filePathToDelete = filesFolder.resolve(fileName);
+        Path filePathToDelete = Paths.get(filesFolderPath + fileName);
         if(Files.exists(filePathToDelete)){
             try{
                 Files.delete(filePathToDelete);
@@ -128,7 +128,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void directoryListingRequest() {
         // Get list of filenames in the directory
-        File directory = new File("Files");
+        File directory = new File("Flies");
         String[] filenames = directory.list();
         String directoryListing = "";
         if (filenames != null) {
@@ -200,7 +200,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void writeRequest(byte[] message) { //checking if the file the client wishes to upload already exists
         String fileName = new String(message, StandardCharsets.UTF_8);
-        File file = new File("Flies/" + fileName);
+        File file = new File(filesFolderPath + fileName);
         if (file.exists()) {
             // File already exists, send error packet
             byte[] ERROR = {0,5,0,5};
@@ -217,9 +217,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void readRequest(byte[] message) {
         String fileName = new String(message, StandardCharsets.UTF_8);
-        String filePath = System.getProperty("user.dir") + "/server/Flies/";
         // Check if file exists
-        File file = new File(filePath + fileName);
+        File file = new File(filesFolderPath + fileName);
         if (!file.exists()) {
             // Send error packet if file not found
             byte[] ACK = {0,4,0,1};
