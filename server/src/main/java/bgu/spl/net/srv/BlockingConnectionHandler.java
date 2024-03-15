@@ -3,10 +3,8 @@ package bgu.spl.net.srv;
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.api.MessageEncoderDecoder;
 import bgu.spl.net.api.MessagingProtocol;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+
+import java.io.*;
 import java.net.Socket;
 
 public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler<T> {
@@ -17,32 +15,40 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
     private BufferedInputStream in;
     private BufferedOutputStream out;
     private volatile boolean connected = true;
+    private final Connections<T> connections;
+    private int connectionId;
 
-    public BlockingConnectionHandler(Socket sock, MessageEncoderDecoder<T> reader, BidiMessagingProtocol<T> protocol) {
+    public BlockingConnectionHandler(Socket sock, MessageEncoderDecoder<T> reader, BidiMessagingProtocol<T> protocol, Connections<T> connections, int connectionId) {
         this.sock = sock;
         this.encdec = reader;
         this.protocol = protocol;
+        this.connections = connections;
+        this.connectionId = connectionId;
     }
 
     @Override
     public void run() {
-        try (Socket sock = this.sock) { //just for automatic closing
-            int read;
+        try (InputStream in = sock.getInputStream();
+             OutputStream out = sock.getOutputStream()) {
 
-            in = new BufferedInputStream(sock.getInputStream());
-            out = new BufferedOutputStream(sock.getOutputStream());
 
-            while (!protocol.shouldTerminate() && connected && (read = in.read()) >= 0) {
-                T nextMessage = encdec.decodeNextByte((byte) read);
-                if (nextMessage != null) {
-                    protocol.process(nextMessage);
+            connections.connect(connectionId, this);
+            protocol.start(connectionId, connections);
 
+            while (!Thread.currentThread().isInterrupted() && !protocol.shouldTerminate()) {
+
+                byte nextByte = in.readNBytes(1)[0];
+                T msg = encdec.decodeNextByte(nextByte);
+                if (msg != null) {
+                    protocol.process(msg);
                 }
+
             }
 
         } catch (IOException ex) {
-            ex.printStackTrace();
         }
+
+        connections.disconnect(connectionId);
 
     }
 
@@ -53,27 +59,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
     }
 
     @Override
-    synchronized public void send(T msg) {
-        try{
-            if(msg != null){
-                out.write(encdec.encode(msg));
-                out.flush();
-            }
-
-        }catch (IOException e){
-            e.printStackTrace();
-        }
-//        try{
-//            OutputStream outputStream = sock.getOutputStream();
-//            outputStream.write(encdec.encode(msg));
-//            outputStream.flush();
-//
-//        }catch(IOException e){
-//            e.printStackTrace();
-//        }
-        //implemented because obviously needed.
-    }
-    public Socket getSock(){
-        return sock;
+    public void send(T msg) {
+        //IMPLEMENT IF NEEDED
     }
 }
