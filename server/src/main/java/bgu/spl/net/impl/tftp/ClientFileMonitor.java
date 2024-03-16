@@ -18,6 +18,7 @@ public class ClientFileMonitor {
     byte[] dirqToSend=null;
     boolean finishedDIRQ;
     int dirqIndex;
+    String uploadingFileName;
 
 
 
@@ -136,5 +137,9 @@ public class ClientFileMonitor {
         }
         return TftpProtocol.concatenateByteArrays(dataOpCode,PacketSize,blockNumber,DirqData);
 
+    }
+
+    public void setUploadedFileName(String fileName) {
+        uploadingFileName = fileName;
     }
 }

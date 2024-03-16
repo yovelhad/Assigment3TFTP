@@ -97,7 +97,9 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 Files.delete(filePathToDelete);
                 byte[] ACK = {0,4,0,0};
                 acknowledgment(ACK);
-                byte[] BCAST = concatenateByteArrays(new byte[] {0,9,0,0},message);
+                byte[] addZero = {0};
+                byte[] fileNameInBytes = fileName.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                byte[] BCAST = concatenateByteArrays(new byte[] {0,9,0},fileNameInBytes,addZero);
                 broadcastFileAddedDeleted(BCAST);
             }catch (IOException e){
                 byte[] ERROR = {0,5,0,2};
@@ -249,6 +251,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         }
         // If file exists, send file data to client
         try {
+            clientMonitor.setUploadedFileName(fileName);
             setAndSendFile(file);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -266,6 +269,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         if(!clientMonitor.finishedUpload ||!clientMonitor.finishedDownloading) {
             sendFile();
         }
+
     }
 
 
@@ -341,6 +345,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         byte[] blockNumberBytes = new byte[]{(byte) (blockNumber>>8),(byte)(blockNumber&0xff)};
         byte[] ACK = new byte[]{0,4,blockNumberBytes[0],blockNumberBytes[1]};
         acknowledgment(ACK);
+
     }
 
 }
