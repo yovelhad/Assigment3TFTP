@@ -2,7 +2,6 @@ package bgu.spl.net.srv;
 
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.api.MessageEncoderDecoder;
-import bgu.spl.net.api.MessagingProtocol;
 import bgu.spl.net.impl.tftp.ConnectionsImpl;
 
 import java.io.IOException;
@@ -17,8 +16,10 @@ public abstract class BaseServer<T> implements Server<T> {
     private final Supplier<BidiMessagingProtocol<T>> protocolFactory;
     private final Supplier<MessageEncoderDecoder<T>> encdecFactory;
     private ServerSocket sock;
-    private AtomicInteger connectionIdCounter = new AtomicInteger(0);
-    private Connections<T> connections = new ConnectionsImpl<>();
+    private Connections<T> connections;
+    private AtomicInteger connectionIdCounter;
+
+
 
     public BaseServer(
             int port,
@@ -29,6 +30,8 @@ public abstract class BaseServer<T> implements Server<T> {
         this.protocolFactory = protocolFactory;
         this.encdecFactory = encdecFactory;
 		this.sock = null;
+        this.connections = new ConnectionsImpl<>();
+        this.connectionIdCounter = new AtomicInteger(0);
     }
 
     @Override
@@ -38,14 +41,18 @@ public abstract class BaseServer<T> implements Server<T> {
 			System.out.println("Server started");
 
             this.sock = serverSock; //just to be able to close
+
             while (!Thread.currentThread().isInterrupted()) {
 
                 Socket clientSock = serverSock.accept();
                 int connectionId = connectionIdCounter.incrementAndGet();
+
                 BlockingConnectionHandler<T> handler = new BlockingConnectionHandler<>(
                         clientSock,
                         encdecFactory.get(),
-                        protocolFactory.get(), connections, connectionId);
+                        protocolFactory.get(),
+                        connections,
+                        connectionId);
 
                 execute(handler);
             }
