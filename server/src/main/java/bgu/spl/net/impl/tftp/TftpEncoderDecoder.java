@@ -7,7 +7,7 @@ import java.util.List;
 
 public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
     //TODO: Implement here the TFTP encoder and decoder
-    private List<Byte> bytes = new LinkedList<Byte>();
+    private List<Byte> bytes = new LinkedList<>();
 
 
     @Override
@@ -26,6 +26,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
                 case 8:
                 case 9:
                     if (nextByte == 0) {
+                        bytes.remove(bytes.size() - 1); //remove the 0, temp solution
                         return listToArray();
                     }
                     break;
@@ -64,12 +65,6 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 
     @Override
     public byte[] encode(byte[] message) {
-        byte[] ret = new byte[message.length+1];
-        for(int i = 0; i<message.length; i++){
-            ret[i]=message[i];
-        }
-        ret[ret.length-1] = 0;
-        return ret;
-        //TODO: implement this
+        return message;
     }
 }
