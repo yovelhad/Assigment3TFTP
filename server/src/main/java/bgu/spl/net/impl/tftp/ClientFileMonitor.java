@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class ClientFileMonitor {
 
@@ -44,10 +45,10 @@ public class ClientFileMonitor {
         }        
     }
 
-    public void setNewUploadFile(String filePathName){
+    public void setNewUploadFile(File file){
         blockNumber = 0;
         try {
-            uploadFile = new FileOutputStream(filePathName, true);
+            uploadFile = new FileOutputStream(file, true);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
@@ -75,24 +76,23 @@ public class ClientFileMonitor {
     }
 
     public byte[] getNextPacket(){
-        byte[] dataOpCode = new byte[6];
+        byte[] dataOpCode = {0, 3};
         byte[] nextPacket = new byte[512];
         try {
-            downloadFile.skip(downloadMonitor*512);
             int size = downloadFile.read(nextPacket);
-            incrementDownloadMonitor();
-            if(size ==-1){
+            if (size == -1){
+                downloadMonitor = 0;
+                downloadFile.close();
+                return null;
+            }
+            if(size < 512){
+                nextPacket = Arrays.copyOf(nextPacket, size);
                 finishedDownloading=true;
             }
             byte[] sizeBytes = new byte[] {(byte) (size>>8),(byte)(size&0xff)};
-            byte[] blockNumberBytes = new byte[] {(byte) (downloadMonitor>>8),(byte)(downloadMonitor&0xff)};
-            dataOpCode[0] = 0;
-            dataOpCode[1] = 3;
-            dataOpCode[2] = sizeBytes[0];
-            dataOpCode[3] = sizeBytes[1];
-            dataOpCode[4] = blockNumberBytes[0];
-            dataOpCode[5] = blockNumberBytes[1];
-            return TftpProtocol.concatenateByteArrays(dataOpCode, nextPacket);
+            byte[] blockNumberBytes = new byte[] {(byte) ((downloadMonitor+1)>>8),(byte)((downloadMonitor+1)&0xff)};
+            incrementDownloadMonitor();
+            return TftpProtocol.concatenateByteArrays(dataOpCode, sizeBytes, blockNumberBytes, nextPacket);
         } catch (IOException e) {
             e.printStackTrace();
         }
