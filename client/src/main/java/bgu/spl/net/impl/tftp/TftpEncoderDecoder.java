@@ -6,14 +6,12 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
-    //TODO: Implement here the TFTP encoder and decoder
     private List<Byte> bytes = new LinkedList<>();
 
 
     @Override
     //messages are just filenames in UTF8
     public byte[] decodeNextByte(byte nextByte) {
-        // TODO: implement this
         bytes.add(nextByte);
         if(bytes.size()>=2) {
             short opcode = (short) ((short) bytes.get(0) & 0xFF << 8 | (short) bytes.get(1) & 0xFF);

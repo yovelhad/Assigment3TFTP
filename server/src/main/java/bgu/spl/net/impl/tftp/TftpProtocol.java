@@ -151,24 +151,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             currentIndex += byteArray.length;
         }
 
-//        byte[] opcode = new byte[] {0, 3}; // 2 bytes - opcode: 6 (for example)
-//        byte[] packetSize = new byte[] {(byte) (directoryListingInBytes.length >> 8), (byte) (directoryListingInBytes.length)}; // 2 bytes - packet size
-//        byte[] blockNumber = new byte[] {0, 1}; // 2 bytes - block number: 1
         clientMonitor.setDirqToSend(directoryListingInBytes);
         initialDirqSendingProcess();
-        // Use ByteBuffer to concatenate the byte arrays
-//        ByteBuffer buffer = ByteBuffer.allocate(opcode.length + packetSize.length + blockNumber.length + directoryListingInBytes.length);
-//        buffer.put(opcode);
-//        buffer.put(packetSize);
-//        buffer.put(blockNumber);
-//        buffer.put(directoryListingInBytes);
-//        clientMonitor.setFinishedDIRQ(true);
-//        clientMonitor.setAndSendDirq(buffer.array());
-//
-//        if(directoryListingInBytes.length<512){
-//            connections.send(connectionId,buffer.array());
-//        }
-//        connections.send(connectionId,buffer.array());
     }
 
     private void initialDirqSendingProcess() {
@@ -249,6 +233,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         // Acknowledge WRQ with block number 0
         byte[] ACK = {0,4,0,0};
         acknowledgment(ACK);
+        byte[] BCAST = concatenateByteArrays(new byte[] {0,9,1},message, new byte[] {0});
+        broadcastFileAddedDeleted(BCAST);
     }
 
 
@@ -258,8 +244,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         File file = new File(filesFolderPath + fileName);
         if (!file.exists()) {
             // Send error packet if file not found
-//            byte[] ACK = {0,4,0,1};
-//            acknowledgment(ACK);
             byte[] ERROR = {0,5,0,1};
             error(ERROR);
             return;
@@ -274,8 +258,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     public void receiveACK(byte[] message) {
-//        short blockNumber = (short) (((short) message[0]) << 8 | (short) (message[1]));
-//        int currentBlockNumber = clientMonitor.getDownloadMonitor()-1;
         if(!clientMonitor.finishedDIRQ){
             sendDIRQ();
             return;
