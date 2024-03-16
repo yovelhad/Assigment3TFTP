@@ -132,6 +132,7 @@ public class ClientFileMonitor {
         dirqIndex++;
         if(dirqToSend.length == 0){
             finishedDIRQ=true;
+            dirqIndex=0;
         }
         return TftpProtocol.concatenateByteArrays(dataOpCode,PacketSize,blockNumber,DirqData);
 

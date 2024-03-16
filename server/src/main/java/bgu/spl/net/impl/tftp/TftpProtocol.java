@@ -150,25 +150,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             System.arraycopy(byteArray, 0, directoryListingInBytes, currentIndex, byteArray.length);
             currentIndex += byteArray.length;
         }
-
-//        byte[] opcode = new byte[] {0, 3}; // 2 bytes - opcode: 6 (for example)
-//        byte[] packetSize = new byte[] {(byte) (directoryListingInBytes.length >> 8), (byte) (directoryListingInBytes.length)}; // 2 bytes - packet size
-//        byte[] blockNumber = new byte[] {0, 1}; // 2 bytes - block number: 1
         clientMonitor.setDirqToSend(directoryListingInBytes);
         initialDirqSendingProcess();
-        // Use ByteBuffer to concatenate the byte arrays
-//        ByteBuffer buffer = ByteBuffer.allocate(opcode.length + packetSize.length + blockNumber.length + directoryListingInBytes.length);
-//        buffer.put(opcode);
-//        buffer.put(packetSize);
-//        buffer.put(blockNumber);
-//        buffer.put(directoryListingInBytes);
-//        clientMonitor.setFinishedDIRQ(true);
-//        clientMonitor.setAndSendDirq(buffer.array());
-//
-//        if(directoryListingInBytes.length<512){
-//            connections.send(connectionId,buffer.array());
-//        }
-//        connections.send(connectionId,buffer.array());
     }
 
     private void initialDirqSendingProcess() {
