@@ -5,15 +5,12 @@ import bgu.spl.net.srv.ConnectionHandler;
 import bgu.spl.net.srv.Connections;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.DatagramPacket;
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ConnectionsImpl<T> implements Connections<T> {
-    private ConcurrentHashMap<Integer, BlockingConnectionHandler<T>> clientsMap; //holds each connected client
+    private final ConcurrentHashMap<Integer, ConnectionHandler<T>> clientsMap; //holds each connected client
     public ConnectionsImpl(){
-        clientsMap = new ConcurrentHashMap<Integer, BlockingConnectionHandler<T>>();
+        clientsMap = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -23,7 +20,7 @@ public class ConnectionsImpl<T> implements Connections<T> {
 
     @Override
     public boolean send(int connectionId, T msg) {
-        BlockingConnectionHandler<T> currentClient = clientsMap.get(connectionId);
+        ConnectionHandler<T> currentClient = clientsMap.get(connectionId);
         if(currentClient!=null) {
             currentClient.send(msg);
             return true;
@@ -33,8 +30,13 @@ public class ConnectionsImpl<T> implements Connections<T> {
 
     @Override
     public void disconnect(int connectionId) {
-        clientsMap.remove(connectionId);
-
+        ConnectionHandler<T> currentClient = clientsMap.remove(connectionId);
+        if(currentClient!=null) {
+            try {
+                currentClient.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
-
 }
