@@ -97,7 +97,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 Files.delete(filePathToDelete);
                 byte[] ACK = {0,4,0,0};
                 acknowledgment(ACK);
-                byte[] BCAST = concatenateByteArrays(new byte[] {0,9,0,0},message);
+                byte[] BCAST = concatenateByteArrays(new byte[] {0,9,0,0},message, new byte[] {0});
                 broadcastFileAddedDeleted(BCAST);
             }catch (IOException e){
                 byte[] ERROR = {0,5,0,2};
