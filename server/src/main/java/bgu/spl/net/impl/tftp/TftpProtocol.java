@@ -4,40 +4,33 @@ import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
 
 import java.io.*;
-import java.lang.reflect.Array;
-import java.net.DatagramPacket;
-import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
-import javax.crypto.IllegalBlockSizeException;
-
-class holder{
-    static ConcurrentHashMap<Integer, Boolean> ids_login = new ConcurrentHashMap<>();
-    static List<String> activeUsers = new ArrayList<>();
-
-    static Integer clientCounter = 0 ;
-
-}
 public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
+    private final LoggedUsers loggedUsers;
     private int connectionId;
+    private String username;
     private Connections<byte[]> connections;
     private boolean shouldTerminate = false;
     ClientFileMonitor clientMonitor;
-    Path filesFolder;
+    String filesFolderPath;
+
+    public TftpProtocol(LoggedUsers loggedUsers, String filesFolderPath) {
+        this.loggedUsers = loggedUsers;
+        this.filesFolderPath = filesFolderPath;
+    }
 
     @Override
     public void start(int connectionId, Connections<byte[]> connections) {
-        this.connectionId = connectionId + holder.clientCounter;
-        holder.clientCounter++;
+        this.connectionId = connectionId;
         this.connections = connections;
         this.shouldTerminate=false;
-        holder.ids_login.put(connectionId, false);
         clientMonitor = new ClientFileMonitor();
     }
 
@@ -48,8 +41,9 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             return;
         }
         short opcode = (short) (((short) message[0]) << 8 | (short) (message[1]));
+        System.out.println("opcode: " + opcode);
         byte[] meatOfMessage = Arrays.copyOfRange(message, 2, message.length);
-        if(opcode!=7  && !holder.ids_login.get(connectionId)){
+        if(opcode!=7  && username == null) {
             byte[] ERROR = {0,5,0,6};
             error(ERROR);
             return;
@@ -63,6 +57,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 break;
             case 3:
                 receiveDataPacket(meatOfMessage);
+                break;
             case 4:
                 receiveACK(meatOfMessage);
                 break;
@@ -76,22 +71,29 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 deleteFileRequest(meatOfMessage);
                 break;
             case 10:
-                shouldTerminate = true;
+                handleDisc();
         }
+    }
+
+    private void handleDisc() {
+        byte[] ACK = {0,4,0,0};
+        acknowledgment(ACK);
+        loggedUsers.logout(username);
+        connections.disconnect(connectionId);
+        shouldTerminate = true;
     }
 
 
     private void broadcastFileAddedDeleted(byte[] message) {
-        for(Integer id : holder.ids_login.keySet()){
-            if(holder.ids_login.get(id)) {
-                connections.send(id,message);
-            }
+        // iterate over all logged in users and send the message
+        for (Map.Entry<String, Integer> entry : loggedUsers.getLoggedUsers().entrySet()) {
+            connections.send(entry.getValue(), message);
         }
     }
 
     private void deleteFileRequest(byte[] message) {
         String fileName = new String(message, StandardCharsets.UTF_8);
-        Path filePathToDelete = filesFolder.resolve(fileName);
+        Path filePathToDelete = Paths.get(filesFolderPath + fileName);
         if(Files.exists(filePathToDelete)){
             try{
                 Files.delete(filePathToDelete);
@@ -112,23 +114,26 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private void loginRequest(byte[] message) {
-        if(holder.ids_login.get(connectionId)){
+        if (username != null) {
             byte[] ERROR = {0,5,0,7};
             error(ERROR);
-        }
-        else{
+        } else{
             String ret = new String(message, StandardCharsets.UTF_8);
-            holder.ids_login.put(connectionId,true);
-            holder.activeUsers.add(ret);
-            byte[] ACK = {0,4,0,0};
-            acknowledgment(ACK);
+            boolean success = loggedUsers.login(ret, connectionId);
+            if (!success) {
+                byte[] ERROR = {0,5,0,7};
+                error(ERROR);
+            } else {
+                username = ret;
+                byte[] ACK = {0,4,0,0};
+                acknowledgment(ACK);
+            }
         }
-
     }
 
     private void directoryListingRequest() {
         // Get list of filenames in the directory
-        File directory = new File("Files");
+        File directory = new File(filesFolderPath);
         String[] filenames = directory.list();
         String directoryListing = "";
         if (filenames != null) {
@@ -137,7 +142,25 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             }
         }
         byte[] directoryListingInBytes = directoryListing.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        connections.send(connectionId,directoryListingInBytes);
+
+        // construct and send the directory listing packet
+        // 2 bytes - opcode: 3
+        // 2 bytes - packet size (length of directoryListingInBytes)
+        // 2 bytes - block number: 1
+        // n bytes - directory listing
+
+        byte[] opcode = new byte[] {0, 6}; // 2 bytes - opcode: 6 (for example)
+        byte[] packetSize = new byte[] {(byte) (directoryListingInBytes.length >> 8), (byte) (directoryListingInBytes.length)}; // 2 bytes - packet size
+        byte[] blockNumber = new byte[] {0, 1}; // 2 bytes - block number: 1
+
+        // Use ByteBuffer to concatenate the byte arrays
+        ByteBuffer buffer = ByteBuffer.allocate(opcode.length + packetSize.length + blockNumber.length + directoryListingInBytes.length);
+        buffer.put(opcode);
+        buffer.put(packetSize);
+        buffer.put(blockNumber);
+        buffer.put(directoryListingInBytes);
+
+        connections.send(connectionId,buffer.array());
     }
 
 
@@ -173,12 +196,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
         } else if (errorCode==6) {
             errorMessage =" User not logged in– Any opcode received before Login completes.";
-            errorMessageInBytes = (errorMessage + '0').getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            errorMessageInBytes = (errorMessage).getBytes(java.nio.charset.StandardCharsets.UTF_8);
             ERROR = concatenateByteArrays(message,errorMessageInBytes);
 
         } else if (errorCode==7) {
             errorMessage ="User already logged in– Login username already connected.";
-            errorMessageInBytes = (errorMessage + '0').getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            errorMessageInBytes = (errorMessage).getBytes(java.nio.charset.StandardCharsets.UTF_8);
             ERROR = concatenateByteArrays(message,errorMessageInBytes);
 
         }
@@ -200,14 +223,14 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void writeRequest(byte[] message) { //checking if the file the client wishes to upload already exists
         String fileName = new String(message, StandardCharsets.UTF_8);
-        File file = new File("Flies/" + fileName);
+        File file = new File(filesFolderPath + fileName);
         if (file.exists()) {
             // File already exists, send error packet
             byte[] ERROR = {0,5,0,5};
             error(ERROR);
             return;
         }
-        clientMonitor.setNewUploadFile("Flies/" + fileName);
+        clientMonitor.setNewUploadFile(file);
 
         // Acknowledge WRQ with block number 0
         byte[] ACK = {0,4,0,0};
@@ -217,9 +240,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void readRequest(byte[] message) {
         String fileName = new String(message, StandardCharsets.UTF_8);
-        String filePath = System.getProperty("user.dir") + "/server/Flies/";
         // Check if file exists
-        File file = new File(filePath + fileName);
+        File file = new File(filesFolderPath + fileName);
         if (!file.exists()) {
             // Send error packet if file not found
             byte[] ACK = {0,4,0,1};
@@ -252,6 +274,9 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
     private void sendFile(){
         byte[] dataPacket = clientMonitor.getNextPacket();
+        if (dataPacket == null) {
+            return;
+        }
         connections.send(connectionId, dataPacket);
     }
 
@@ -277,6 +302,26 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         return result;
     }
 
+    public static byte[] concatenateByteArrays(byte[]... arrays) {
+        // Calculate the length of the result array
+        int totalLength = 0;
+        for (byte[] array : arrays) {
+            totalLength += array.length;
+        }
+
+        // Create the result array
+        byte[] result = new byte[totalLength];
+
+        // Copy the contents of each array into the result array
+        int currentIndex = 0;
+        for (byte[] array : arrays) {
+            System.arraycopy(array, 0, result, currentIndex, array.length);
+            currentIndex += array.length;
+        }
+
+        return result;
+    }
+
     private void receiveDataPacket(byte[] message) {
         short sizeOfPacket = (short) (((short) message[0]) << 8 | (short) (message[1]));    
         byte[] onlyData = Arrays.copyOfRange(message, 4, message.length);
@@ -287,9 +332,4 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         acknowledgment(ACK);
     }
 
-
-
-
-
-    
 }
