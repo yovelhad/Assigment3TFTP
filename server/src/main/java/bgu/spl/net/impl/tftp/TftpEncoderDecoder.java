@@ -33,7 +33,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 
                 case 3:
                     if(bytes.size()>4) {
-                        short packetSize = (short) ((short) bytes.get(2) & 0xFF << 8 | (short) bytes.get(3) & 0xFF);//only used for data packets
+                        short packetSize = (short) ((short) bytes.get(2) << 8 | (short) bytes.get(3) & 0xFF);//only used for data packets
                         if (bytes.size() == packetSize + 6) {
                             return listToArray();
                         }
