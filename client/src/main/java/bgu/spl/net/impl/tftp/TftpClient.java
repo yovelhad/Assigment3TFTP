@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class TftpClient {
-    //TODO: implement the main logic of the client, when using a thread per client the main logic goes here
+
     public static void main(String[] args) throws IOException {
         String ip = args.length == 3 ? args[1] : "127.0.0.1";
         int port = args.length == 3 ? Integer.parseInt(args[2]) : 7777;
@@ -16,11 +16,7 @@ public class TftpClient {
         // all the connection to the server is done in the ConnectionHandler, so we open the socket in it
         ConnectionHandler connectionHandler = new ConnectionHandler(ip, port);
 
-        // create 2 threads
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-
-        // Thread for listening to the server
-        executor.submit(() -> {
+        Thread listeningThread = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 Optional<byte[]> receivedData;
                 try {
@@ -28,16 +24,13 @@ public class TftpClient {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                // I think all of the processing should be done in the protocol, so we should call the protocol's process method here?
                 receivedData.ifPresent(data -> {
                     System.out.println("Received: " + Arrays.toString(data));
-                    // Call the listen function here
                 });
             }
         });
 
-        // Thread for reading the standard input
-        executor.submit(() -> {
+        Thread keyboardThread = new Thread(() -> {
             Scanner scanner = new Scanner(System.in);
             while (scanner.hasNextLine()) {
                 String input = scanner.nextLine();
@@ -52,7 +45,8 @@ public class TftpClient {
             }
         });
 
-        executor.shutdown();
+        listeningThread.start();
+        keyboardThread.start();
 
     }
 
@@ -70,7 +64,6 @@ public class TftpClient {
                 System.arraycopy(opcode, 0, message, 0, opcode.length);
                 System.arraycopy(usernameBytes, 0, message, opcode.length, usernameBytes.length);
                 connectionHandler.send(message);
-                // todo: we need to wait for the response from the server
                 break;
 
             case "DELRQ":
@@ -123,8 +116,6 @@ public class TftpClient {
                 }
                 opcode = new byte[]{0x0,0x10};
                 connectionHandler.send(opcode);
-                // Handle DISC command
-                // ... rest of the DISC handling code ...
                 break;
 
             default:
